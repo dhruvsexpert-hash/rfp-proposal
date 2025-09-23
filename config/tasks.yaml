@@ -1,0 +1,102 @@
+RFP_and_Data_Intake:
+  description: >
+    The Manager Agent will ingest the entire RFP document and all supporting client-provided data (e.g., past performance references, personnel resumes, financial data).
+  expected_output: >
+    A parsed, structured internal representation of the RFP.
+
+Requirements_Audit_Gap_Analysis:
+  description: >
+    The Manager Agent analyzes the RFP and generates a comprehensive Data Requirements Matrix. It then cross-references this with the ingested data. For any missing data (e.g., a required certification), it notes the gap and a plan to create a compliant substitute.
+  expected_output: >
+    A Data Requirements Matrix and a Data Availability Report flagging all gaps.
+
+Initial_Delegation:
+  description: >
+    The Manager Agent delegates the initial content creation tasks to the core agents based on the RFP sections.
+  expected_output: >
+    All relevant agents (Technical, Price, Past Performance, Management, Executive Summary ) are activated with their first task.
+
+Quality_Control_and_Iteration:
+  description: >
+    After a specialized agent submits a completed section, the Manager Agent reviews it against the RFP's Section L and M. It checks for compliance, factual accuracy, and overall quality. It will provide specific, actionable feedback for revisions if needed.
+  expected_output: >
+    An Approval Report for a completed section, or a Revision Request sent back to the agent with detailed notes.
+    in json format
+    {
+    "solicitation_id": {id},
+    "section_title": {section_title},
+    "section_purpose": {section_purpose},
+    "section_instructions_to_writer": {},
+    "section_content":{}
+    "section_source_mapping": [
+      
+      "source_type": "internal" | "web", 
+      "reference": "Source identifier or URL",
+      "description": "Brief description of cited content"
+        
+    ],
+    "section_win_theme_alignment": [
+    {list all the winning points in the section}
+        
+    ],
+    "subsection_title": {},
+    "subsection_requirement": {},
+    "context": null,
+    "subsection_purpose": {},
+    "subsection_instructions_to_writer": {},
+    "subsection_content":{}
+    "subsection_source_mapping": [
+     "source_type": "internal" | "web", 
+      "reference": "Source identifier or URL",
+      "description": "Brief description of cited content"
+    ],
+    "subsection_win_theme_alignment": [
+        {list all the winning points in the subsection}
+    ],
+    "refinement_prompt": ""
+    }
+
+
+
+Final_Assembly:
+  description: >
+    Once all individual sections are approved, the Manager Agent compiles them into a list of sections, cohesive proposal, ensuring all formatting and submission instructions are met and make sure all sections are in your output not just one.
+  expected_output: >
+    correctly formatted json list proposal section
+    {
+    "proposal": [
+    
+    {
+    "solicitation_id": {id},
+    "section_title": {section_title},
+    "section_purpose": {section_purpose},
+    "section_instructions_to_writer": {},
+    "section_content":{}
+    "section_source_mapping": [
+        
+    ],
+    "section_win_theme_alignment": [
+        
+    ],
+    "subsection_title": {},
+    "subsection_requirement": {},
+    "context": null,
+    "subsection_purpose": {},
+    "subsection_instructions_to_writer": {},
+    "subsection_content":{}
+    "subsection_source_mapping": [
+     
+    ],
+    "subsection_win_theme_alignment": [
+        
+    ],
+    "refinement_prompt": ""
+    }]
+    }
+
+Final_formatting:
+  agent: Data_Compliance_Agent
+  description: >
+    Generate full proposal sections with subsections based on RFP and company data.
+  expected_output: >
+    Strict JSON format of proposal with sections and subsections.
