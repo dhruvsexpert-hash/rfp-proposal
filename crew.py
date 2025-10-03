@@ -9,7 +9,7 @@ from PyPDF2 import PdfReader
 from pydantic import BaseModel
 from typing import List
 import google.generativeai as genai
-from new1 import query_vector_db as data_rag
+#from new1 import query_vector_db as data_rag
 from new import query_vector_db1 as temp_rag
 from crewai import Agent, Task, Process, Crew, LLM,CrewOutput
 from crewai.project import CrewBase, agent, crew, task
@@ -21,6 +21,7 @@ from typing import List, Optional, Dict, Any
 # =========================
 # ENV + API KEYS
 # =========================
+even_list=[]
 load_dotenv()
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 SERPER_API_KEY = os.getenv("SERPER_API_KEY")
@@ -50,7 +51,7 @@ class SubSection(BaseModel):
     subsection_requirement: Optional[str] = Field(None, description="Requirement description for this subsection.")
     context: Optional[str] = Field(None, description="Contextual notes for subsection.")
     subsection_purpose: Optional[str] = Field(None, description="Purpose of this subsection.")
-    subsection_instructions_to_writer: Optional[str] = Field(None, description="Instructions for the writer.")
+    
     subsection_content: Optional[str] = Field(None, description="Generated or drafted content for this subsection.")
     subsection_source_mapping: List[SourceMapping] = Field(default_factory=list, description="Mapping to original RFP sources.")
     subsection_win_theme_alignment: List[WinThemeAlignment] = Field(default_factory=list, description="How subsection aligns with win themes.")
@@ -64,7 +65,7 @@ class Section(BaseModel):
     section_source_mapping: List[SourceMapping] = Field(default_factory=list, description="Mapping to original RFP sources.")
     section_win_theme_alignment: List[WinThemeAlignment] = Field(default_factory=list, description="How section aligns with win themes.")
     subsections: List[SubSection] = Field(default_factory=list, description="Subsections under this section.")
-    refinement_prompt: Optional[str] = Field(None, description="Prompt to refine this section.")
+    
 
 class ProposalOutput(BaseModel):
     proposal: List[Section] = Field(..., description="List of proposal sections with details.")
@@ -73,18 +74,13 @@ class ProposalOutput(BaseModel):
 
 
 Manager=Agent(
-  role="the project manager",
-  goal="To manage the entire proposal generation process from end to end, ensuring all agents work on the correct data and produce high-quality, compliant outputs. It's the ultimate gatekeeper for quality and integrity. And also make sure that none of agent should make a empty llm calls.",
+  role="manager",
+  goal="To manage the entire proposal generation process from end to end, ensuring all agents work on the correct data and produce high-quality, compliant outputs. It's the ultimate gatekeeper for quality and integrity. And also make sure that none of agent should make a empty llm calls. you have access to the_rag_query_agent for data query from knowledge base, the_corporate_intelligence_analyst for company data extraction, the_executive_proposal_writer for excutive summary section writing, the_technical_solution_writer for technical section writing, the_financial_analyst_and_cost_proposer for price section writing, the_credentials_verifier for past performance section writing, project_manager for management section writing",
   backstory="You are a seasoned veteran of countless high-stakes proposal battles. You've seen it all: last-minute crises, missing data, and fierce competition. Your reputation was built on a single principle: ruthless attention to detail and a zero-tolerance policy for non-compliance. You've learned that every successful proposal is built on a solid foundation of verifiable facts, not wishful thinking. Your singular purpose now is to ensure the integrity of the process and deliver a final product that is not just good, but unflinchingly perfect and compliant.",
   llm=llm,
   max_rpm=5
 )
-# =========================
-# FAISS + EMBEDDING HELPERS
-# =========================
-INDEX_PATH = "./vectorstore/faiss_index"
-DIMENSION = 500
-EMBEDDING_MODEL = "models/embedding-001"
+
 
 
 # =========================
@@ -105,28 +101,28 @@ class ProposalCrew:
     # === Agents ===
     @agent
     def Data_Ingestion_Agent(self) -> Agent:
-        return Agent(**self.agents_config["Data_Ingestion_Agent"], tools=[data_rag,temp_rag,web_search], llm=llm,max_iter=10,max_rpm=9)
+        return Agent(**self.agents_config["Data_Ingestion_Agent"], tools=[temp_rag,web_search], llm=llm,max_iter=10,max_rpm=9)
     @agent
     def Executive_Summary_Agent(self) -> Agent:
-        return Agent(**self.agents_config["Executive_Summary_Agent"], tools=[data_rag,temp_rag,web_search], llm=llm,max_iter=5,max_rpm=9)
+        return Agent(**self.agents_config["Executive_Summary_Agent"], tools=[temp_rag,web_search], llm=llm,max_iter=5,max_rpm=9)
     @agent
     def Corporate_Data_Extractor(self) -> Agent:
-        return Agent(**self.agents_config["Corporate_Data_Extractor"], tools=[data_rag],llm=llm,max_iter=5,max_rpm=9)
+        return Agent(**self.agents_config["Corporate_Data_Extractor"], tools=[temp_rag],llm=llm,max_iter=5,max_rpm=9)
     @agent
     def Technical_Approach_Agent(self) -> Agent:
-        return Agent(**self.agents_config["Technical_Approach_Agent"], tools=[data_rag,temp_rag,web_search], llm=llm,max_iter=5,max_rpm=9)
+        return Agent(**self.agents_config["Technical_Approach_Agent"], tools=[temp_rag,web_search], llm=llm,max_iter=5,max_rpm=9)
     @agent
     def Price_Section_Agent(self)->Agent:
-        return Agent(**self.agents_config["Price_Section_Agent"],tools=[data_rag,temp_rag,web_search],llm=llm,max_iter=5,max_rpm=9)
+        return Agent(**self.agents_config["Price_Section_Agent"],tools=[temp_rag,web_search],llm=llm,max_iter=5,max_rpm=9)
     @agent
     def Past_Performance_Agent(self) -> Agent:
-        return Agent(**self.agents_config["Past_Performance_Agent"],tools=[data_rag,temp_rag,web_search],llm=llm,max_iter=5,max_rpm=9)
+        return Agent(**self.agents_config["Past_Performance_Agent"],tools=[temp_rag,web_search],llm=llm,max_iter=5,max_rpm=9)
     @agent
     def Management_Section_Agent(self) -> Agent:
-        return Agent(**self.agents_config["Management_Section_Agent"],tools=[data_rag,temp_rag,web_search],llm=llm,max_iter=5,max_rpm=9)
+        return Agent(**self.agents_config["Management_Section_Agent"],tools=[temp_rag,web_search],llm=llm,max_iter=5,max_rpm=9)
     @agent
     def Other_Extra_Data_Agent(self) -> Agent:
-        return Agent(**self.agents_config["Other_Extra_Data_Agent"],tools=[data_rag,temp_rag,web_search],llm=llm,max_iter=5,max_rpm=9)
+        return Agent(**self.agents_config["Other_Extra_Data_Agent"],tools=[temp_rag,web_search],llm=llm,max_iter=5,max_rpm=9)
     @agent
     def Data_Compliance_Agent(self) -> Agent:
         return Agent(**self.agents_config["Data_Compliance_Agent"],llm=llm,max_rpm=9)
@@ -154,6 +150,21 @@ class ProposalCrew:
     def Final_formatting(self) -> Task:
         return Task(**self.tasks_config["Final_formatting"],output_json=ProposalOutput)
     
+    def my_task_callback(self, output):
+        if len(even_list)==0:
+            even_list.append(str(f"Task {len(even_list)+1} RFP_and_Data_Intake is completed"))
+        elif len(even_list)==1:
+            even_list.append(str(f"Task {len(even_list)+1} Requirements_Audit_Gap_Analysis is completed"))
+        elif len(even_list)==2:
+            even_list.append(str(f"Task {len(even_list)+1} Initial_Delegation is completed"))
+        elif len(even_list)==3:
+            even_list.append(str(f"Task {len(even_list)+1} Quality_Control_and_Iteration is completed"))
+        elif len(even_list)==4:
+            even_list.append(str(f"Task {len(even_list)+1} Final_Assembly is completed"))
+        elif len(even_list)==5:
+            even_list.append(str(f"Task {len(even_list)+1} Final_formatting is completed"))
+        
+        print(f"Task completed: {output.description}")
     # === Crew ===
     @crew
     def crew(self) -> Crew:
@@ -161,11 +172,12 @@ class ProposalCrew:
             agents=self.agents,
             tasks=self.tasks,
             process=Process.hierarchical,
+            task_callback=self.my_task_callback,
             verbose=True,
             max_rpm=9,
             manager_agent=Manager,
             output_json=ProposalOutput,
-            output_log_file="my_crew_logs.json",
+            on_execution_failed=lambda event: print(f"Crew failed: {event.error}"),
             allow_delegation=True,
             embedder={
                 "provider": "google",
@@ -175,3 +187,4 @@ class ProposalCrew:
                 },
             },
         )
+

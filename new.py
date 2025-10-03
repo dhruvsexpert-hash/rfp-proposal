@@ -15,6 +15,11 @@ from functools import lru_cache
 import logging
 from crewai.tools import tool
 
+# Additional imports for multi-format extraction
+from docx import Document as DocxDocument
+from pptx import Presentation
+import pandas as pd
+
 # Set up logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -72,6 +77,16 @@ def get_conversational_chain():
         logger.error(f"Error creating conversational chain: {str(e)}")
         raise
 
+# === Extraction helpers ===
+
+def split_text_to_chunks(text: str):
+    text_splitter = RecursiveCharacterTextSplitter(
+        chunk_size=1000,
+        chunk_overlap=200,
+        length_function=len
+    )
+    return text_splitter.split_text(text)
+
 def process_pdf(file_path):
     """Extract text from a single PDF and return text chunks."""
     try:
@@ -84,13 +99,7 @@ def process_pdf(file_path):
                 text += page_text + '\n'
         if not text.strip():
             raise Exception(f"No text extracted from {file_path}")
-
-        text_splitter = RecursiveCharacterTextSplitter(
-            chunk_size=1000,
-            chunk_overlap=200,
-            length_function=len
-        )
-        chunks = text_splitter.split_text(text)
+        chunks = split_text_to_chunks(text)
         if not chunks:
             raise Exception(f"No text chunks created from {file_path}")
         logger.info(f"Extracted {len(chunks)} chunks from {file_path}")
@@ -99,10 +108,87 @@ def process_pdf(file_path):
         logger.error(f"Error processing {file_path}: {str(e)}")
         return []
 
-def load_or_create_vector_db(folder_path="templates", persist_directory="db1"):
-    """Load existing Chroma store or create a new one from all PDFs in the folder."""
+def process_docx(file_path: str):
+    """Extract text from DOCX and return text chunks."""
+    try:
+        logger.info(f"Processing DOCX: {file_path}")
+        doc = DocxDocument(file_path)
+        paragraphs = [p.text for p in doc.paragraphs if p.text and p.text.strip()]
+        text = "\n".join(paragraphs)
+        if not text.strip():
+            raise Exception(f"No text extracted from {file_path}")
+        chunks = split_text_to_chunks(text)
+        logger.info(f"Extracted {len(chunks)} chunks from {file_path}")
+        return chunks
+    except Exception as e:
+        logger.error(f"Error processing DOCX {file_path}: {str(e)}")
+        return []
+
+def process_xlsx(file_path: str):
+    """Extract text from XLSX by reading cell values and returning chunks."""
+    try:
+        logger.info(f"Processing XLSX: {file_path}")
+        # Use pandas to read all sheets
+        xls = pd.ExcelFile(file_path)
+        parts = []
+        for sheet_name in xls.sheet_names:
+            try:
+                df = xls.parse(sheet_name=sheet_name, dtype=str)
+                df = df.fillna("")
+                # Create a textual representation: include sheet name
+                parts.append(f"Sheet: {sheet_name}")
+                parts.append(df.to_csv(index=False))
+            except Exception as se:
+                logger.warning(f"Failed parsing sheet {sheet_name} in {file_path}: {se}")
+        text = "\n\n".join(parts)
+        if not text.strip():
+            raise Exception(f"No text extracted from {file_path}")
+        chunks = split_text_to_chunks(text)
+        logger.info(f"Extracted {len(chunks)} chunks from {file_path}")
+        return chunks
+    except Exception as e:
+        logger.error(f"Error processing XLSX {file_path}: {str(e)}")
+        return []
+
+def process_pptx(file_path: str):
+    """Extract text from PPTX slides and return chunks."""
+    try:
+        logger.info(f"Processing PPTX: {file_path}")
+        prs = Presentation(file_path)
+        parts = []
+        for idx, slide in enumerate(prs.slides, start=1):
+            slide_text_parts = []
+            for shape in slide.shapes:
+                if hasattr(shape, "text") and shape.text:
+                    slide_text_parts.append(shape.text)
+            if slide_text_parts:
+                parts.append(f"Slide {idx}:\n" + "\n".join(slide_text_parts))
+        text = "\n\n".join(parts)
+        if not text.strip():
+            raise Exception(f"No text extracted from {file_path}")
+        chunks = split_text_to_chunks(text)
+        logger.info(f"Extracted {len(chunks)} chunks from {file_path}")
+        return chunks
+    except Exception as e:
+        logger.error(f"Error processing PPTX {file_path}: {str(e)}")
+        return []
+
+def process_file_by_extension(file_path: str):
+    ext = os.path.splitext(file_path.lower())[1]
+    if ext == '.pdf':
+        return process_pdf(file_path)
+    if ext == '.docx':
+        return process_docx(file_path)
+    if ext == '.xlsx':
+        return process_xlsx(file_path)
+    if ext == '.pptx':
+        return process_pptx(file_path)
+    logger.warning(f"Unsupported file type for {file_path}; skipping.")
+    return []
+
+def load_or_create_vector_db(folder_path="uploads", persist_directory="db"):
+    """Load existing Chroma store or create a new one from supported files in the folder."""
     embeddings = MiniLMEmbeddings(embedding_model)
-    
     try:
         if os.path.exists(os.path.join(persist_directory, "chroma.sqlite3")):
             logger.info(f"Loading existing Chroma store from {persist_directory}")
@@ -114,33 +200,34 @@ def load_or_create_vector_db(folder_path="templates", persist_directory="db1"):
         if not os.path.exists(folder_path):
             raise Exception(f"Folder {folder_path} does not exist")
 
-        pdf_files = [f for f in os.listdir(folder_path) if f.lower().endswith('.pdf')]
-        if not pdf_files:
-            raise Exception(f"No PDF files found in {folder_path}")
+        supported_exts = {'.pdf', '.docx', '.xlsx', '.pptx'}
+        files = [f for f in os.listdir(folder_path) if os.path.splitext(f.lower())[1] in supported_exts]
+        if not files:
+            raise Exception(f"No supported files found in {folder_path}")
 
-        logger.info(f"Processing {len(pdf_files)} PDF files")
+        logger.info(f"Processing {len(files)} files from {folder_path}")
         all_chunks = []
-        for pdf_file in pdf_files:
-            file_path = os.path.join(folder_path, pdf_file)
-            print(file_path)
-            chunks = process_pdf(file_path)
+        for fname in files:
+            file_path = os.path.join(folder_path, fname)
+            logger.info(f"Extracting from: {file_path}")
+            chunks = process_file_by_extension(file_path)
             if chunks:
                 all_chunks.extend(chunks)
 
         if not all_chunks:
-            raise Exception("No valid text chunks extracted from any PDF")
+            raise Exception("No valid text chunks extracted from any document")
 
         logger.info(f"Total chunks to embed: {len(all_chunks)}")
         logger.info("Generating embeddings... This may take a while")
-        
+
         documents = [Document(page_content=chunk) for chunk in all_chunks]
-        
+
         db = Chroma.from_documents(
             documents=documents,
             embedding=embeddings,
             persist_directory=persist_directory
         )
-        
+
         logger.info(f"Created and saved new Chroma store to {persist_directory}")
         return db
 
@@ -150,7 +237,7 @@ def load_or_create_vector_db(folder_path="templates", persist_directory="db1"):
 
 @tool("ChromaDB Query Tool")
 def query_vector_db1(query: str) -> str:
-    """Searches through the rfp samples and templates ChromaDB vector database and provides a response to the given query using AI for QA based on LangChain."""
+    """Searches through the rfp instruction and company data ChromaDB vector database and provides a response to the given query using AI for QA based on LangChain."""
     try:
         logger.info(f"Querying vector store with: {query}")
         db = load_or_create_vector_db()
@@ -170,15 +257,18 @@ def query_vector_db1(query: str) -> str:
         logger.error(f"Error querying vector store: {str(e)}")
         return f"Error: {str(e)}"
 
-db = load_or_create_vector_db()
-docs = db.similarity_search("what's the data is about in documents?", k=20)
-if not docs:
-    logger.info("No relevant documents found")
-    print("No relevant information found in the vector store.")
+# Optional: quick smoke test if this file is executed directly
+if __name__ == "__main__":
+    db = load_or_create_vector_db()
+    docs = db.similarity_search("what's the data is about in documents?", k=20)
+    if not docs:
+        logger.info("No relevant documents found")
+        print("No relevant information found in the vector store.")
+    else:
+        chain = get_conversational_chain()
+        response = chain(
+            {"input_documents": docs, "question": "what's the data is about in documents?"},
+            return_only_outputs=True
+        )
+        print(response["output_text"])
 
-chain = get_conversational_chain()
-response = chain(
-    {"input_documents": docs, "question": "what's the data is about in documents?"},
-    return_only_outputs=True
-    )
-print(response["output_text"])

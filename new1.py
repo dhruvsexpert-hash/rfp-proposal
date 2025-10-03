@@ -56,7 +56,7 @@ def get_cached_embedding(query):
 def get_conversational_chain():
     """Create QA chain with Google's Gemini model."""
     prompt_template = """
-    Answer the question as detailed as possible from the provided context, make sure to provide all the details of company related data or prposal related data provided to you, if the answer is not available in the provided context just say, "answer is not available in the context", don't provide the wrong answer.\n \n
+    Answer the question as detailed as possible from the provided context, make sure to provide all the details of company related data or proposal related data provided to you, if the answer is not available in the provided context just say, "answer is not available in the context", don't provide the wrong answer.\n \n
     Context:\n{context}\n
     Question: \n{question}\n
     Answer:

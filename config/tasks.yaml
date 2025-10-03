@@ -70,7 +70,7 @@ Final_Assembly:
     "solicitation_id": {id},
     "section_title": {section_title},
     "section_purpose": {section_purpose},
-    "section_instructions_to_writer": {},
+    
     "section_content":{}
     "section_source_mapping": [
         
@@ -90,8 +90,7 @@ Final_Assembly:
     "subsection_win_theme_alignment": [
         
     ],
-    "refinement_prompt": ""
-    }]
+    ]
     }
 
 Final_formatting:
